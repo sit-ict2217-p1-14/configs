@@ -1,0 +1,16 @@
+# Setup from snapshot
+sudo nano /usr/local/etc/tac_plus-ng.cfg
+sudo /usr/local/sbin/tac_plus-ng -P /usr/local/etc/tac_plus-ng.cfg
+sudo mkdir -p /var/log/tac_plus-ng
+sudo cp ~/event-driven-servers/tac_plus-ng/extra/tac_plus-ng.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now tac_plus-ng
+
+# Restart service
+sudo nano /usr/local/etc/tac_plus-ng.cfg
+sudo /usr/local/sbin/tac_plus-ng -P /usr/local/etc/tac_plus-ng.cfg   # no output = OK
+sudo systemctl restart tac_plus-ng
+
+# Verify accounting
+systemctl status tac_plus-ng
+sudo tail -f /var/log/tac_plus-ng/*.log

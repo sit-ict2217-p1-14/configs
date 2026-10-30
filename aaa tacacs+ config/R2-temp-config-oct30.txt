@@ -1,0 +1,11 @@
+aaa group server tacacs+ TACGRP
+ server name TACVM
+ ip vrf forwarding Mgmt-vrf
+ ip tacacs source-interface g0/1/0
+exit
+aaa authentication login default group TACGRP local
+aaa authorization exec default group TACGRP local
+aaa authorization commands 15 default group TACGRP local
+aaa accounting exec default start-stop group TACGRP
+aaa accounting commands 15 default stop-only group TACGRP
+end

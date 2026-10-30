@@ -1,3 +1,13 @@
+conf t
+aaa new-model
+tacacs server TACVM
+ address ipv4 172.16.1.98
+ key Student@s1t
+ timeout 2
+exit
+username localadmin privilege 15 secret local123
+aaa authorization console
+
 aaa group server tacacs+ TACGRP
  server name TACVM
  ip vrf forwarding Mgmt-vrf

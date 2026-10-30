@@ -1,3 +1,5 @@
 *~
+network-configs/*
+!network-configs/*.esh
 servers/web-server/config/cert.pem
 servers/web-server/config/key.pem

@@ -1,0 +1,9 @@
+enable
+configure terminal
+
+<% DeviceName=ASW1 %>
+<%+ ./partials/common.esh.part %>
+<% CommonConfigAll $DeviceName %>
+<% CommonConfigASW $DeviceName %>
+
+end

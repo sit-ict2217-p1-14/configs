@@ -17,16 +17,14 @@ ip name-server $CachingDNSServer_IP_ADDRESS
 
 crypto key generate rsa
 
-vlan $VLAN_OOB_ID
-  name $VLAN_OOB_NAME
-exit
-
 vrf definition $OOB_VRF_NAME
+  address-family ipv4
+  exit-address-family
 exit
 
 interface $oobInterface
-  ip address $oobIPAddress $VLAN_OOB_SUBNET_MASK
   vrf forwarding $OOB_VRF_NAME
+  ip address $oobIPAddress $VLAN_OOB_SUBNET_MASK
   no shutdown
 exit
 
@@ -51,29 +49,25 @@ tacacs server TACVM
  timeout 2
 exit
 
-aaa authorization console
-
 aaa group server tacacs+ TACGRP
  server name TACVM
  ip vrf forwarding $OOB_VRF_NAME
  ip tacacs source-interface $oobInterface
 exit
+
 aaa authentication login default group TACGRP local
-aaa authorization exec default group TACGRP local
-aaa authorization commands 15 default group TACGRP local
 aaa accounting exec default start-stop group TACGRP
 aaa accounting commands 15 default stop-only group TACGRP
+aaa authorization exec default group TACGRP local
+aaa authorization commands 15 default group TACGRP local
+aaa authorization console
+
 
 EOF
 }
 
 CommonConfigR () {
-  Lo1SubnetAddress="$1"
   cat <<EOF
-interface lo0
- ip address $Lo1SubnetAddress 255.255.255.255
- ip nat inside
-exit
 EOF
 }
 
@@ -127,34 +121,9 @@ exit"
   printf '%s' "$consolidatedOutput"
 }
 
-CommonConfigSW () {
-  mgmtIPAddress="$1"
+CommonConfigASW () {
+  deviceName="$1"
   cat <<'EOF'
-no ip domain lookup
-
-spanning-tree portfast default
-spanning-tree portfast bpduguard default
-
-errdisable recovery cause bpduguard
-
-! === Enable IP Routing ===
-ip routing
-
-! === VLAN Database ===
-vlan $VLAN_NetworkMGMT_ID
- name $VLAN_NetworkMGMT_NAME
-vlan $VLAN_HumanResources_ID
-  name $VLAN_HumanResources_NAME
-vlan $VLAN_MGMT_ID
- name $VLAN_MGMT_NAME
-exit
-
-! == Remote Management Interface ==
-interface vlan $VLAN_MGMT_ID
- ip address $mgmtIPAddress $VLAN_MGMT_SUBNET_MASK
-exit
-
-ip route 0.0.0.0 0.0.0.0 $VLAN_MGMT_DEFAULT_GATEWAY
 EOF
 }
 -%>

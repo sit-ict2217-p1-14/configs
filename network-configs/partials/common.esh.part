@@ -1,0 +1,160 @@
+<%
+CommonConfigAll () {
+  networkDeviceName="$1"
+  OOB_VRF_NAME="Mgmt-vrf"
+  eval "$(cat <<EOF
+    vtyMax="\${${networkDeviceName}_VTY_COUNT}"
+    oobIPAddress="\${${networkDeviceName}_OOB_IP_ADDRESS}"
+    oobInterface="\${${networkDeviceName}_OOB_INTERFACE}"
+EOF
+  )"
+  cat <<EOF
+hostname $networkDeviceName
+
+! === Remote Management ===
+ip domain name $DOMAIN_SUFFIX_NET_MGMT
+ip name-server $CachingDNSServer_IP_ADDRESS
+
+crypto key generate rsa
+
+vlan $VLAN_OOB_ID
+  name $VLAN_OOB_NAME
+exit
+
+vrf definition $OOB_VRF_NAME
+exit
+
+interface $oobInterface
+  ip address $oobIPAddress $VLAN_OOB_SUBNET_MASK
+  vrf forwarding $OOB_VRF_NAME
+  no shutdown
+exit
+
+
+
+! === AAA ===
+
+aaa new-model
+
+username $ADMIN_USERNAME privilege 15 secret 0 $ADMIN_PASSWORD
+
+line vty 0 $vtyMax
+ logging synchronous
+ transport input ssh
+ exec-timeout 20 0
+ login authentication default
+exit
+
+tacacs server TACVM
+ address ipv4 $AAA_IP_ADDRESS
+ key $SECRET_TACACS
+ timeout 2
+exit
+
+aaa authorization console
+
+aaa group server tacacs+ TACGRP
+ server name TACVM
+ ip vrf forwarding $OOB_VRF_NAME
+ ip tacacs source-interface $oobInterface
+exit
+aaa authentication login default group TACGRP local
+aaa authorization exec default group TACGRP local
+aaa authorization commands 15 default group TACGRP local
+aaa accounting exec default start-stop group TACGRP
+aaa accounting commands 15 default stop-only group TACGRP
+
+EOF
+}
+
+CommonConfigR () {
+  Lo1SubnetAddress="$1"
+  cat <<EOF
+interface lo0
+ ip address $Lo1SubnetAddress 255.255.255.255
+ ip nat inside
+exit
+EOF
+}
+
+CommonConfigDSW () {
+  deviceName="$1"
+  vlanInternalTemplateNames="$(printf '%s' "$VLANS_INTERNAL_TEMPLATE_NAMES" | sed 's/\\n/\n/g')"
+  vlans=""
+  vlanInterfaces=""
+  while IFS= read -r vlan_internal_template_name; do
+    eval "vlanID=\"\${VLAN_${vlan_internal_template_name}_ID}\""
+    eval "vlanName=\"\${VLAN_${vlan_internal_template_name}_NAME}\""
+    eval "vlanSubnetMask=\"\${VLAN_${vlan_internal_template_name}_SUBNET_MASK}\""
+    eval "vlanDefaultGateway=\"\${VLAN_${vlan_internal_template_name}_DEFAULT_GATEWAY}\""
+    if [ "$deviceName" = "CSW1" ]; then
+      eval "vlanSVI=\"\${VLAN_${vlan_internal_template_name}_SVI1}\""
+    else
+      eval "vlanSVI=\"\${VLAN_${vlan_internal_template_name}_SVI2}\""
+    fi
+    vlans="$vlans$(cat <<EOF
+
+vlan $vlanID
+  name $vlanName
+EOF
+)"
+    if [ ! "$vlanSVI" = "" ]; then
+        vlanInterfaces="$vlanInterfaces$(cat <<EOF
+
+
+interface vlan $vlanID
+  ip address $vlanSVI $vlanSubnetMask
+  standby version 2
+  standby $vlanID ip $vlanDefaultGateway
+  standby $vlanID priority 100
+  no shutdown
+EOF
+      )"
+    fi
+
+  done <<EOF
+$vlanInternalTemplateNames
+EOF
+
+  consolidatedOutput="! === Inter-VLAN Routing ===
+ip routing
+
+$vlans$vlanInterfaces"
+  if [ ! "$vlans" = "" ]; then
+    consolidatedOutput="$consolidatedOutput
+exit"
+  fi
+  printf '%s' "$consolidatedOutput"
+}
+
+CommonConfigSW () {
+  mgmtIPAddress="$1"
+  cat <<'EOF'
+no ip domain lookup
+
+spanning-tree portfast default
+spanning-tree portfast bpduguard default
+
+errdisable recovery cause bpduguard
+
+! === Enable IP Routing ===
+ip routing
+
+! === VLAN Database ===
+vlan $VLAN_NetworkMGMT_ID
+ name $VLAN_NetworkMGMT_NAME
+vlan $VLAN_HumanResources_ID
+  name $VLAN_HumanResources_NAME
+vlan $VLAN_MGMT_ID
+ name $VLAN_MGMT_NAME
+exit
+
+! == Remote Management Interface ==
+interface vlan $VLAN_MGMT_ID
+ ip address $mgmtIPAddress $VLAN_MGMT_SUBNET_MASK
+exit
+
+ip route 0.0.0.0 0.0.0.0 $VLAN_MGMT_DEFAULT_GATEWAY
+EOF
+}
+-%>

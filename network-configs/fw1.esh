@@ -1,0 +1,8 @@
+enable
+config terminal
+
+<% DeviceName=FW1 -%>
+<%+ ./partials/common.esh.part -%>
+<% CommonConfigAll $DeviceName -%>
+
+end

@@ -1,8 +1,19 @@
 enable
 configure terminal
 
-<% DeviceName=SSW %>
+<% DeviceName=SSW -%>
 <%+ ./partials/common.esh.part %>
-<% CommonConfigAll $DeviceName %>
+<% CommonConfigAll $DeviceName -%>
 
+interface g1/0/1
+<% AccessportStanza "$VLAN_Jump_ID" -%>
+
+interface g1/0/2
+<% TrunkportStanza '50,55' -%>
+
+interface g1/0/3
+<% AccessportStanza "$VLAN_DMZ_ID" -%>
+
+interface range g1/0/4-24
+<% ShutportStanza -%>
 end

@@ -1,0 +1,11 @@
+configure
+set scripting-mode on
+
+<% DeviceName=FW2 -%>
+<%+ ./partials/common.esh.part -%>
+<% CommonConfigAll $DeviceName -%>
+
+set scripting-mode off
+validate full
+commit
+exit

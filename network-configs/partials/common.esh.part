@@ -1,13 +1,6 @@
 <%
-CommonConfigAll () {
-  networkDeviceName="$1"
-  OOB_VRF_NAME="Mgmt-vrf"
-  eval "$(cat <<EOF
-    vtyMax="\${${networkDeviceName}_VTY_COUNT}"
-    oobIPAddress="\${${networkDeviceName}_OOB_IP_ADDRESS}"
-    oobInterface="\${${networkDeviceName}_OOB_INTERFACE}"
-EOF
-  )"
+
+Internal_CommonConfigAll_CISCO_IOS () {
   cat <<EOF
 hostname $networkDeviceName
 
@@ -18,14 +11,14 @@ ip name-server $CachingDNSServer_IP_ADDRESS
 crypto key generate rsa
 
 vrf definition $OOB_VRF_NAME
-  address-family ipv4
-  exit-address-family
+ address-family ipv4
+ exit-address-family
 exit
 
 interface $oobInterface
-  vrf forwarding $OOB_VRF_NAME
-  ip address $oobIPAddress $VLAN_OOB_SUBNET_MASK
-  no shutdown
+ vrf forwarding $OOB_VRF_NAME
+ ip address $oobIPAddress $VLAN_OOB_SUBNET_MASK
+ no shutdown
 exit
 
 
@@ -66,6 +59,99 @@ aaa authorization console
 EOF
 }
 
+Internal_CommonConfigAll_CISCO_ASA () {
+  cat <<EOF
+; === Remote Management ===
+interface $oobInterface
+ management-only
+ nameif management
+ security-level 100
+ ip address $oobIPAddress $VLAN_OOB_SUBNET_MASK
+exit
+
+crypto key generate rsa modulus 2048
+yes
+
+ssh 0.0.0.0 0.0.0.0 management
+
+ssh timeout 20
+console timeout 20
+
+; === AAA ===
+; Test command: test aaa-server authentication TACGRP host $AAA_IP_ADDRESS username $SECRET_TACACS_ADMIN_USERNAME
+aaa-server TACGRP protocol tacacs+
+aaa-server TACGRP (management) host $AAA_IP_ADDRESS
+ key $SECRET_TACACS
+ timeout 2
+exit
+
+aaa authentication ssh console TACGRP LOCAL
+aaa authentication serial console TACGRP LOCAL
+aaa authentication enable console TACGRP LOCAL
+
+aaa accounting ssh console TACGRP
+aaa accounting serial console TACGRP
+aaa accounting command privilege 15 TACGRP
+
+aaa authorization exec authentication-server auto-enable
+EOF
+}
+
+
+Internal_CommonConfigAll_PALOALTO_PANOS () {
+  cat <<EOF
+! === Remote Management ===
+edit deviceconfig system
+ set hostname $networkDeviceName
+ set ip-address $oobIPAddress
+ set netmask $VLAN_OOB_SUBNET_MASK
+ set domain $DOMAIN_SUFFIX_NET_MGMT
+ set domain-lookup-url $CachingDNSServer_IP_ADDRESS
+top
+
+; === AAA ===
+; Test command: test authentication authentication-profile TAC-AUTH username $SECRET_TACACS_ADMIN_USERNAME password
+edit shared server-profile tacplus TACVM
+ set timeout 2
+ set protocol PAP
+ set server TACVM address $AAA_IP_ADDRESS secret $SECRET_TACACS port 49
+ set admin-use-only yes
+top
+
+edit shared authentication-profile TAC-AUTH
+ set method tacplus server-profile TACVM
+ set allow-list all
+top
+
+edit deviceconfig system
+ set authentication-profile TAC-AUTH
+top
+EOF
+}
+
+CommonConfigAll () {
+  networkDeviceName="$1"
+  OOB_VRF_NAME='Mgmt-vrf'
+  eval "$(cat <<EOF
+    syntax="\${${networkDeviceName}_SYNTAX}"
+    vtyMax="\${${networkDeviceName}_VTY_COUNT}"
+    oobIPAddress="\${${networkDeviceName}_OOB_IP_ADDRESS}"
+    oobInterface="\${${networkDeviceName}_OOB_INTERFACE}"
+EOF
+  )"
+
+  case "$syntax" in
+    CISCO-IOS)
+      Internal_CommonConfigAll_CISCO_IOS ;;
+    CISCO-ASA)
+      Internal_CommonConfigAll_CISCO_ASA ;;
+    PA-PANOS)
+      Internal_CommonConfigAll_PALOALTO_PANOS ;;
+    *)
+      echo "Error: '$syntax' is an unrecognised syntax type." >&2
+  esac
+}
+
 CommonConfigR () {
   cat <<EOF
 EOF
@@ -81,10 +167,12 @@ CommonConfigDSW () {
     eval "vlanName=\"\${VLAN_${vlan_internal_template_name}_NAME}\""
     eval "vlanSubnetMask=\"\${VLAN_${vlan_internal_template_name}_SUBNET_MASK}\""
     eval "vlanDefaultGateway=\"\${VLAN_${vlan_internal_template_name}_DEFAULT_GATEWAY}\""
-    if [ "$deviceName" = "CSW1" ]; then
-      eval "vlanSVI=\"\${VLAN_${vlan_internal_template_name}_SVI1}\""
+    eval "sviIndex=\"\${${deviceName}_SVI_INDEX}\""
+
+    if [ ! "$sviIndex" = "" ]; then
+      eval "vlanSVIIPAddress=\"\${VLAN_${vlan_internal_template_name}_SVI1}\""
     else
-      eval "vlanSVI=\"\${VLAN_${vlan_internal_template_name}_SVI2}\""
+      eval "vlanSVIIPAddress=\"\${VLAN_${vlan_internal_template_name}_SVI2}\""
     fi
     vlans="$vlans$(cat <<EOF
 
@@ -92,12 +180,12 @@ vlan $vlanID
   name $vlanName
 EOF
 )"
-    if [ ! "$vlanSVI" = "" ]; then
+    if [ ! "$vlanSVIIPAddress" = "" ]; then
         vlanInterfaces="$vlanInterfaces$(cat <<EOF
 
 
 interface vlan $vlanID
-  ip address $vlanSVI $vlanSubnetMask
+  ip address $vlanSVIIPAddress $vlanSubnetMask
   standby version 2
   standby $vlanID ip $vlanDefaultGateway
   standby $vlanID priority 100
@@ -126,4 +214,39 @@ CommonConfigASW () {
   cat <<'EOF'
 EOF
 }
+
+AccessportStanza () {
+  vlanID="$1"
+  cat <<EOF
+ switchport access vlan $vlanID
+ switchport mode access
+ switchport nonegotiate
+EOF
+}
+
+TrunkportStanza () {
+  vlanIDsAllowed="$1"
+  if [ ! "$vlanIDsAllowed" = "" ]; then
+    cat <<EOF
+ switchport trunk allowed vlan $vlanIDsAllowed
+EOF
+  fi
+  cat <<EOF
+; Removed this line as it's not recognised in the real Catalyst 9200.
+; However, it's needed for Cisco CNL IOL L2 XE image.
+; switchport trunk encapsulation dot1q
+ switchport trunk native $VLAN_Native_ID
+ switchport mode trunk
+ switchport nonegotiate
+EOF
+}
+
+ShutportStanza() {
+  cat <<EOF
+ switchport access vlan $VLAN_Park_ID
+ switchport nonegotiate
+ shutdown
+EOF
+}
+
 -%>

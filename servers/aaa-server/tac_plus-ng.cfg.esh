@@ -1,0 +1,113 @@
+#!/usr/local/sbin/tac_plus-ng
+#
+# tac_plus-ng config for the "tacacs" VM (Proxmox VM 102) - TACACS+ only
+#   VM:  ens18 (net0 -> vmbr0 -> eno1)
+#   NAS: R2  172.16.1.102
+#
+# Install path:  /usr/local/etc/tac_plus-ng.cfg
+# Check syntax:  sudo /usr/local/sbin/tac_plus-ng -P /usr/local/etc/tac_plus-ng.cfg
+
+id = spawnd {
+    listen { port = 49 }               # TACACS+ (TCP 49)
+    spawn {
+        instances min = 1
+        instances max = 8
+    }
+}
+
+id = tac_plus-ng {
+
+    # ---------------------------------------------------------------
+    # Logging (Lab 3.4 - Accounting)
+    # ---------------------------------------------------------------
+    log tac-access { destination = /var/log/tac_plus-ng/access.log }       # logins (pass/fail)
+    log tac-author { destination = /var/log/tac_plus-ng/authorization.log } # exec + command authorization
+    log tac-acct   { destination = /var/log/tac_plus-ng/accounting.log }    # exec start/stop + commands
+    log conn       { destination = /var/log/tac_plus-ng/connections.log }   # which devices connected
+
+    access log        = tac-access
+    authorization log = tac-author
+    accounting log    = tac-acct
+    connection log    = conn
+
+    pap password mapping = login
+
+    # ---------------------------------------------------------------
+    # AAA clients (NAS devices). Key must match R2 exactly:
+    #   tacacs server ... key Student@s1t
+    # ---------------------------------------------------------------
+    <%
+    tacacsClientsTemplateInternalNames="$(printf '%s' "$TACACS_CLIENTS_TEMPLATE_INTERNAL_NAMES" | sed 's/\\n/\n/g')"
+    
+    while IFS= read -r tacacs_client_internal_template_name; do
+      eval "tacacsClientAddress=\"\${${tacacs_client_internal_template_name}_OOB_IP_ADDRESS}\""
+    %>
+    device <%= $tacacs_client_internal_template_name %> {
+        address = <%= $tacacsClientAddress %>
+        key = "<%= $SECRET_TACACS %>"
+    }
+    <%
+    done <<EOF
+$tacacsClientsTemplateInternalNames
+EOF
+    %>
+    # More devices later, e.g.:
+    # device SW1 { address = 172.16.1.101  key = "Student@s1t" }
+
+    # ---------------------------------------------------------------
+    # Profiles (Lab 3.3 - Authorization)
+    # For CLI views instead of privilege levels: comment out the
+    # priv-lvl line and uncomment the cli-view-name line.
+    # The view must already exist on the router (parser view ...).
+    # ---------------------------------------------------------------
+
+    # Full admin: privilege 15, every command allowed
+    profile admin {
+        script {
+            if (service == shell) {
+                if (cmd == "") {
+                    set priv-lvl = 15
+                    # set cli-view-name = ADMIN
+                    permit
+                }
+                permit
+            }
+            if (service == PaloAlto) {
+                set PaloAlto-Admin-Role = superuser
+                permit
+            }
+        }
+    }
+
+    # Support: privilege 10, "show" and "ping" commands only
+    # (command restrictions apply once R2 has "aaa authorization commands")
+    profile support {
+        script {
+            if (service == shell) {
+                if (cmd == "") {
+                    set priv-lvl = 10
+                    # set cli-view-name = SUPPORT
+                    permit
+                }
+                if (cmd =~ /^(show|ping|exit|logout|enable|disable) /) permit
+                if (cmd =~ /^(show|ping|exit|logout|enable|disable)$/) permit
+                deny
+            }
+        }
+    }
+
+    # ---------------------------------------------------------------
+    # Users (Lab 3.2 - Authentication)
+    # SHA-512 crypt hashes. Make a new one with:  openssl passwd -6
+    #   tacadmin / tac123     tacsupport / sup123
+    # ---------------------------------------------------------------
+    user tacadmin {
+        password login = crypt $6$Tac2217labA$fAEQCmPvyEXnMLoSoRJWoSl9yXOq6noqnn62TWx6Z4kjsT8cUyvXnK39y6Q2gsstFHFm6d.GKhxI.BN0JzqCn1
+        profile = admin
+    }
+
+    user tacsupport {
+        password login = crypt $6$Sup2217labA$1QIGHce.IRmusNLTTv1WkYBvG3xHJDOFpM2ylBnaj4CjgvjKrKnMvBHmYhH53iD9RXaxgDtUhhwGHBHADMrr61
+        profile = support
+    }
+}

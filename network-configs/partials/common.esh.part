@@ -157,29 +157,53 @@ CommonConfigR () {
 EOF
 }
 
-CommonConfigDSW () {
+Internal_VLANConfig () {
   deviceName="$1"
   vlanInternalTemplateNames="$(printf '%s' "$VLANS_INTERNAL_TEMPLATE_NAMES" | sed 's/\\n/\n/g')"
   vlans=""
   vlanInterfaces=""
-  while IFS= read -r vlan_internal_template_name; do
-    eval "vlanID=\"\${VLAN_${vlan_internal_template_name}_ID}\""
-    eval "vlanName=\"\${VLAN_${vlan_internal_template_name}_NAME}\""
-    eval "vlanSubnetMask=\"\${VLAN_${vlan_internal_template_name}_SUBNET_MASK}\""
-    eval "vlanDefaultGateway=\"\${VLAN_${vlan_internal_template_name}_DEFAULT_GATEWAY}\""
-    eval "sviIndex=\"\${${deviceName}_SVI_INDEX}\""
+  vlanSVIIPAddress=""
+  consolidatedOutput=""
 
-    if [ ! "$sviIndex" = "" ]; then
-      eval "vlanSVIIPAddress=\"\${VLAN_${vlan_internal_template_name}_SVI1}\""
-    else
-      eval "vlanSVIIPAddress=\"\${VLAN_${vlan_internal_template_name}_SVI2}\""
-    fi
+  while IFS= read -r vlan_internal_template_name; do
+    eval "$(cat<<EOF
+vlanID="\${VLAN_${vlan_internal_template_name}_ID}"
+vlanName="\${VLAN_${vlan_internal_template_name}_NAME}"
+vlanSubnetMask="\${VLAN_${vlan_internal_template_name}_SUBNET_MASK}"
+vlanDefaultGateway="\${VLAN_${vlan_internal_template_name}_DEFAULT_GATEWAY}"
+vlanTrunkedBy="\${VLAN_${vlan_internal_template_name}_TRUNKED_BY}}"
+sviIndex="\${${deviceName}_SVI_INDEX}"
+EOF
+    )"
+
+    [ ! "$sviIndex" = "" ] &&
+      eval "vlanSVIIPAddress=\"\${VLAN_${vlan_internal_template_name}_SVI${sviIndex}}\""
+
+    # Configure only relevant VLANs that the switch will ever handle.
+    # In Excel (comma-separated): VLANs[Trunked by]
+    deviceTrunksVlan=
+    while IFS= read -r trunkingDevice; do
+      # Get exact matches
+      if [ "$trunkingDevice" = "$deviceName" ] ||
+           # Also match Excel entries w/o number suffix (e.g. `DSW` matches `DSW2`)
+           [ ! "$(printf '%s' "$deviceName" | grep "^$trunkingDevice[[:digit:]]\{1,\}$")" ]; then
+        deviceTrunksVlan=0
+        break
+      fi
+    done <<EOF
+$(printf '%s' "$vlanTrunkedBy" | sed 's/,/\n/g')
+EOF
+
+    [ ! "$deviceTrunksVlan" ] &&
+      continue
+
     vlans="$vlans$(cat <<EOF
 
 vlan $vlanID
   name $vlanName
 EOF
 )"
+
     if [ ! "$vlanSVIIPAddress" = "" ]; then
         vlanInterfaces="$vlanInterfaces$(cat <<EOF
 
@@ -198,15 +222,22 @@ EOF
 $vlanInternalTemplateNames
 EOF
 
-  consolidatedOutput="! === Inter-VLAN Routing ===
+  cat <<EOF
+$vlans$vlanInterfaces
+
+exit
+EOF
+}
+
+CommonConfigDSW () {
+  deviceName="$1"
+
+  cat <<EOF
+! === Inter-VLAN Routing ===
 ip routing
 
-$vlans$vlanInterfaces"
-  if [ ! "$vlans" = "" ]; then
-    consolidatedOutput="$consolidatedOutput
-exit"
-  fi
-  printf '%s' "$consolidatedOutput"
+$(Internal_VLANConfig "$deviceName")
+EOF
 }
 
 CommonConfigASW () {

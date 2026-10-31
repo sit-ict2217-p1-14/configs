@@ -2,7 +2,7 @@ enable
 configure terminal
 
 <% DeviceName=SSW -%>
-<%+ ./partials/common.esh.part %>
+<%+ ./partials/common.esh.part -%>
 <% CommonConfigAll $DeviceName -%>
 
 interface g1/0/1
@@ -14,6 +14,9 @@ interface g1/0/2
 interface g1/0/3
 <% AccessportStanza "$VLAN_DMZ_ID" -%>
 
-interface range g1/0/4-24
+interface range g1/0/4-22
 <% ShutportStanza -%>
 end
+
+interface g1/0/23-24
+<% TrunkportStanza 45,50,55,60 -%>

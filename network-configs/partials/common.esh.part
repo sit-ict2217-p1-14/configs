@@ -240,9 +240,11 @@ $(Internal_VLANConfig "$deviceName")
 EOF
 }
 
-CommonConfigASW () {
+CommonConfigASW_SSW () {
   deviceName="$1"
   cat <<'EOF'
+! === VLANs ===
+$(Internal_VLANConfig "$deviceName")
 EOF
 }
 

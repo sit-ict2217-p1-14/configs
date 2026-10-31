@@ -6,9 +6,12 @@ configure terminal
 
 hostname $DeviceName
 
-interface range g1/0/1-12
+interface range g1/0/1-11
 <% AccessportStanza "$VLAN_OOB_ID" -%>
   switchport protected
+
+interface g1/0/12
+<% AccessportStanza "$VLAN_OOB_ID" -%>
 
 interface range g1/0/13-24
 <% ShutportStanza -%>

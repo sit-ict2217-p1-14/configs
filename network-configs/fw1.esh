@@ -5,4 +5,53 @@ config terminal
 <%+ ./partials/common.esh.part -%>
 <% CommonConfigAll $DeviceName -%>
 
+no interface vlan 1
+
+interface e1/1
+ switchport
+ switchport mode access
+ switchport access <%= $VLAN_DSWX_FW1_ID %>
+
+interface e1/2
+ switchport
+ switchport mode access
+ switchport access <%= $VLAN_DSWX_FW1_ID %>
+
+interface vlan <%= $VLAN_DSWX_FW1_ID %>
+ nameif inside
+ security-level 100
+ ip address <%= $VLAN_DSWX_FW1_DEFAULT_GATEWAY %> <%= $VLAN_DSWX_FW1_SUBNET_MASK %>
+
+interface e1/3
+ no switchport
+ nameif dmz
+ security-level 50
+ ip address <%= $VLAN_DMZ_DEFAULT_GATEWAY %> <%= $VLAN_DMZ_SUBNET_MASK %>
+ no shutdown
+
+interface e1/7
+ no switchport
+ nameif outside1
+ security-level 0
+ ip address <%= $VLAN_R1_FW1_FIRST_HOST %> <%= $VLAN_R1_FW1_SUBNET_MASK %>
+ no shutdown
+
+interface e1/8
+ no switchport
+ nameif outside2
+ security-level 0
+ ip address <%= $VLAN_R2_FW1_FIRST_HOST %> <%= $VLAN_R2_FW1_SUBNET_MASK %>
+ no shutdown
+
+prefix-list LAN-TO-EDGE seq 5 deny 0.0.0.0/0 le 32
+
+router ospf 1
+ network <%= $VLAN_DSWX_FW1_SUBNET_ADDRESS %> <%= $VLAN_DSWX_FW1_SUBNET_MASK %> area 0
+ network <%= $VLAN_R1_FW1_SUBNET_ADDRESS %> <%= $VLAN_R1_FW1_SUBNET_MASK %> area 1
+ network <%= $VLAN_R2_FW1_SUBNET_ADDRESS %> <%= $VLAN_R2_FW1_SUBNET_MASK %> area 1
+ area 1 nssa
+ area 1 filter-list prefix LAN-TO-EDGE in
+ log-adj-changes
+exit
+
 end

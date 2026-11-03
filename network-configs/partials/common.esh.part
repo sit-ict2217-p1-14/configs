@@ -153,7 +153,49 @@ EOF
 }
 
 CommonConfigR () {
+  deviceName="$1"
+
+  # Some janky hardcoding
+  if [ "$deviceName" = "R1" ]; then
+    routerIndex=1
+  else
+    routerIndex=2
+  fi
+
+  eval "$(cat <<EOF
+    oobIPAddress="\$${deviceName}_OOB_IP_ADDRESS"
+    ispRouterIP="\$ISP${routerIndex}_ROUTER_IP"
+    ispSubnetMask="\$ISP${routerIndex}_SUBNET_MASK"
+    rxFW1VlanIPAddress="\$VLAN_R${routerIndex}_FW1_DEFAULT_GATEWAY"
+    rxFW1VlanSubnetMask="\$VLAN_R${routerIndex}_FW1_SUBNET_MASK"
+    rxFW1VlanSubnetAddress="\$VLAN_R${routerIndex}_FW1_SUBNET_ADDRESS"
+    rxFW1VlanNetworkWildcard="\$VLAN_R${routerIndex}_FW1_NETWORK_WILDCARD"
+EOF
+  )"
+
   cat <<EOF
+! === LAN-side: to FW1 ===
+interface g0/0/0
+ ip address $rxFW1VlanIPAddress $rxFW1VlanSubnetMask
+ ip nat inside
+ no shutdown
+
+! === WAN-side: to ISP1 ===
+interface g0/1/1
+ ip address $ispRouterIP $ispSubnetMask
+ ip nat outside
+ no shutdown
+exit
+
+! === OSPF ===
+router ospf 1
+ router-id $oobIPAddress
+ passive-interface default
+ no passive-interface g0/0/0
+ no passive-interface g0/0/1
+ network $rxFW1VlanSubnetAddress $rxFW1VlanNetworkWildcard area 1
+ area 1 nssa default-information-originate
+exit
 EOF
 }
 
@@ -166,7 +208,7 @@ Internal_VLANConfig () {
   consolidatedOutput=""
 
   while IFS= read -r vlan_internal_template_name; do
-    eval "$(cat<<EOF
+    eval "$(cat <<EOF
 vlanID="\${VLAN_${vlan_internal_template_name}_ID}"
 vlanName="\${VLAN_${vlan_internal_template_name}_NAME}"
 vlanSubnetMask="\${VLAN_${vlan_internal_template_name}_SUBNET_MASK}"
@@ -202,7 +244,7 @@ EOF
 vlan $vlanID
   name $vlanName
 EOF
-)"
+    )"
 
     if [ ! "$vlanSVIIPAddress" = "" ]; then
         vlanInterfaces="$vlanInterfaces$(cat <<EOF

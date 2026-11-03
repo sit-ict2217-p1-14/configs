@@ -1,7 +1,7 @@
 enable
 configure terminal
 
-<% DeviceName=ASW2 %>
+<% DeviceName=ISSW %>
 <%+ ./partials/common.esh.part %>
 <% CommonConfigAll $DeviceName %>
 <% CommonConfigASW_SSW $DeviceName %>

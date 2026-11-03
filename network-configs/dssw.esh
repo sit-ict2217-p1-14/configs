@@ -1,7 +1,7 @@
 enable
 configure terminal
 
-<% DeviceName=SSW -%>
+<% DeviceName=DSSW -%>
 <%+ ./partials/common.esh.part -%>
 <% CommonConfigAll $DeviceName -%>
 

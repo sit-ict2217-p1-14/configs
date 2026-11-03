@@ -192,15 +192,15 @@ router ospf 1
  router-id $oobIPAddress
  passive-interface default
  no passive-interface g0/0/0
- network $rxFW1VlanSubnetAddress $rxFW1VlanNetworkWildcard area 1
- area 1 nssa default-information-originate
+ network $rxFW1VlanSubnetAddress $rxFW1VlanNetworkWildcard area 0
+ default-information originate
 exit
 
 ip nat pool snat-pool 203.149.211.9 203.149.211.9 prefix-length 29
 
 ip access-list standard snat-acl
- 10 permit host 172.17.9.133
- 20 permit $rxFW1VlanIPAddress $rxFW1VlanNetworkWildcard
+ 10 permit host $ispRouterIP
+ 20 permit $PRIVATE_NETWORK_SUBNET_ADDRESS $PRIVATE_NETWORK_NETWORK_WILDCARD
 
 ip nat inside source list snat-acl pool snat-pool overload
 

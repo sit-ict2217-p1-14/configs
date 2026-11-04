@@ -9,14 +9,12 @@ interface g1/0/1
 <% AccessportStanza "$VLAN_Jump_ID" -%>
 
 interface g1/0/2
-<% TrunkportStanza '50,55' -%>
-
-interface g1/0/3
 <% AccessportStanza "$VLAN_DMZ_ID" -%>
 
-interface range g1/0/4-22
+interface range g1/0/3-23
 <% ShutportStanza -%>
-end
 
-interface g1/0/23-24
-<% TrunkportStanza 45,50,55,60 -%>
+interface g1/0/24
+<% TrunkportStanza "$VLAN_Jump_ID,$VLAN_DMZ_ID" -%>
+
+end

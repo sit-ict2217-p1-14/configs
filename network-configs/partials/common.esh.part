@@ -165,6 +165,7 @@ CommonConfigR () {
   eval "$(cat <<EOF
     oobIPAddress="\$${deviceName}_OOB_IP_ADDRESS"
     ispRouterIP="\$ISP${routerIndex}_ROUTER_IP"
+    ispDefaultGateway="\$ISP${routerIndex}_DEFAULT_GATEWAY"
     ispSubnetMask="\$ISP${routerIndex}_SUBNET_MASK"
     rxFW1VlanIPAddress="\$VLAN_R${routerIndex}_FW1_DEFAULT_GATEWAY"
     rxFW1VlanSubnetMask="\$VLAN_R${routerIndex}_FW1_SUBNET_MASK"
@@ -204,6 +205,10 @@ ip access-list standard snat-acl
 
 ip nat inside source list snat-acl pool snat-pool overload
 
+ip route 0.0.0.0 0.0.0.0 $ispDefaultGateway
+ip route 203.149.211.10 255.255.255.255 172.16.1.75
+ip route 203.149.211.11 255.255.255.255 172.16.1.86
+ip route 203.149.211.13 255.255.255.255 172.16.1.58
 EOF
 }
 
@@ -299,9 +304,14 @@ EOF
 }
 
 AccessportStanza () {
-  vlanID="$1"
-  cat <<EOF
+  vlanID="${1:-}"
+  if [ ! "$vlanID" = "" ]; then
+    cat <<EOF
  switchport access vlan $vlanID
+EOF
+  fi
+  
+  cat <<EOF
  switchport mode access
  switchport nonegotiate
 EOF
@@ -318,7 +328,7 @@ EOF
 ; Removed this line as it's not recognised in the real Catalyst 9200.
 ; However, it's needed for Cisco CNL IOL L2 XE image.
 ; switchport trunk encapsulation dot1q
- switchport trunk native $VLAN_Native_ID
+ switchport trunk native vlan $VLAN_Native_ID
  switchport mode trunk
  switchport nonegotiate
 EOF

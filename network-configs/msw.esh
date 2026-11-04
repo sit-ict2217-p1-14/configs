@@ -4,7 +4,7 @@ configure terminal
 <% DeviceName=MSW %>
 <%+ ./partials/common.esh.part %>
 
-hostname $DeviceName
+hostname <%= $DeviceName %>
 
 interface range g1/0/1-11
 <% AccessportStanza "$VLAN_OOB_ID" -%>

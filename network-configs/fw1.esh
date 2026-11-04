@@ -22,9 +22,19 @@ interface vlan <%= $VLAN_DSWX_FW1_ID %>
  security-level 100
  ip address <%= $VLAN_DSWX_FW1_DEFAULT_GATEWAY %> <%= $VLAN_DSWX_FW1_SUBNET_MASK %>
 
+interface vlan <%= $VLAN_DMZ_ID %>
+ nameif dmz
+ security-level 50
+ ip address <%= $VLAN_DMZ_DEFAULT_GATEWAY %> <%= $VLAN_DMZ_SUBNET_MASK %>
+
+interface vlan <%= $VLAN_Jump_ID %>
+ nameif jump
+ security-level 50
+ ip address <%= $VLAN_Jump_DEFAULT_GATEWAY %> <%= $VLAN_Jump_SUBNET_MASK %>
+
 interface e1/3
  no switchport
- nameif dmz
+ nameif jump
  security-level 50
  ip address <%= $VLAN_DMZ_DEFAULT_GATEWAY %> <%= $VLAN_DMZ_SUBNET_MASK %>
  no shutdown
@@ -43,8 +53,14 @@ interface e1/8
  ip address <%= $VLAN_R2_FW1_FIRST_HOST %> <%= $VLAN_R2_FW1_SUBNET_MASK %>
  no shutdown
 
+! === OSPF ===
+route-map CONNECTED-TO-OSPF permit 10
+ match interface jump dmz inside
+
 router ospf 1
- network <%= $PRIVATE_NETWORK_SUBNET_ADDRESS %> <%= f $PRIVATE_NETWORK_SUBNET_MASK %> area 0
+ network <%= $VLAN_R1_FW1_FIRST_HOST %> <%= $VLAN_R1_FW1_SUBNET_MASK %> area 0
+ network <%= $VLAN_R2_FW1_FIRST_HOST %> <%= $VLAN_R2_FW1_SUBNET_MASK %> area 0
+ redistribute connected subnets route-map CONNECTED-TO-OSPF
  log-adj-changes
 exit
 
@@ -53,12 +69,28 @@ policy-map global_policy
  class inspection_default
   inspect icmp
 
-object network DMZ-WEB
- nat (dmz,outside) static <%= $WebServer_ISP1_IP_ADDRESS %>
+! TODO: Transfer DNAT from router to firewall?
+!object network DMZ-WEB
+! host <%= $WebServer_ISP1_IP_ADDRESS %>
+! nat (dmz,outside) static <%= $WebServer_ISP1_IP_ADDRESS_PUBLIC_FW1 %>
+!
+!object network DMZ-DNS
+! host <%= $AuthoritativeDNSServer_ISP1_IP_ADDRESS %>
+! nat (dmz,outside) static <%= $AuthoritativeDNSServer_ISP1_IP_ADDRESS_PUBLIC_FW1 %>
+!
+!object network JUMP-JUMPHOST
+! host <%= $Jumphost_ISP1_IP_ADDRESS %>
+! nat (dmz,outside) static <%= $Jumphost_ISP1_IP_ADDRESS_PUBLIC_FW1 %>
 
 access-group OUTSIDE-IN in interface outside
 access-list OUTSIDE-IN extended permit tcp any object DMZ-WEB eq www
 access-list OUTSIDE-IN extended permit tcp any object DMZ-WEB eq 443
 access-list OUTSIDE-IN extended permit icmp any object DMZ-WEB
+
+access-list OUTSIDE-IN extended permit tcp any object DMZ-DNS eq 53
+access-list OUTSIDE-IN extended permit icmp any object DMZ-DNS
+
+access-list OUTSIDE-IN extended permit tcp any object JUMP-JUMPHOST eq ssh
+access-list OUTSIDE-IN extended permit icmp any object JUMP-JUMPHOST
 
 end

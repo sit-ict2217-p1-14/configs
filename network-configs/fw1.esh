@@ -48,4 +48,17 @@ router ospf 1
  log-adj-changes
 exit
 
+
+policy-map global_policy
+ class inspection_default
+  inspect icmp
+
+object network DMZ-WEB
+ nat (dmz,outside) static <%= $WebServer_ISP1_IP_ADDRESS %>
+
+access-group OUTSIDE-IN in interface outside
+access-list OUTSIDE-IN extended permit tcp any object DMZ-WEB eq www
+access-list OUTSIDE-IN extended permit tcp any object DMZ-WEB eq 443
+access-list OUTSIDE-IN extended permit icmp any object DMZ-WEB
+
 end

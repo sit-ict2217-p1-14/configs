@@ -11,11 +11,13 @@ interface e1/1
  switchport
  switchport mode access
  switchport access <%= $VLAN_DSWX_FW1_ID %>
+ no shutdown
 
 interface e1/2
  switchport
  switchport mode access
  switchport access <%= $VLAN_DSWX_FW1_ID %>
+ no shutdown
 
 interface vlan <%= $VLAN_DSWX_FW1_ID %>
  nameif inside
@@ -56,10 +58,10 @@ interface e1/8
 ! === OSPF ===
 route-map CONNECTED-TO-OSPF permit 10
  match interface jump dmz inside
-
 router ospf 1
- network <%= $VLAN_R1_FW1_FIRST_HOST %> <%= $VLAN_R1_FW1_SUBNET_MASK %> area 0
- network <%= $VLAN_R2_FW1_FIRST_HOST %> <%= $VLAN_R2_FW1_SUBNET_MASK %> area 0
+ network <%= $VLAN_R1_FW1_SUBNET_ADDRESS %> <%= $VLAN_R1_FW1_SUBNET_MASK %> area 0
+ network <%= $VLAN_R2_FW1_SUBNET_ADDRESS %> <%= $VLAN_R2_FW1_SUBNET_MASK %> area 0
+ network <%= $VLAN_DSWX_FW1_SUBNET_ADDRESS %> <%= $VLAN_DSWX_FW1_SUBNET_MASK %> area 0
  redistribute connected subnets route-map CONNECTED-TO-OSPF
  log-adj-changes
 exit

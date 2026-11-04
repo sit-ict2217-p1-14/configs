@@ -292,6 +292,29 @@ CommonConfigDSW () {
 ip routing
 
 $(Internal_VLANConfig "$deviceName")
+
+! === OSPF ===
+router ospf 1
+ router-id $oobIPAddress
+ passive-interface default
+ no passive-interface g1/0/24
+ network $PRIVATE_NETWORK_SUBNET_ADDRESS $PRIVATE_NETWORK_NETWORK_WILDCARD area 0
+ default-information originate
+
+interface g1/0/1
+$(TrunkportStanza "$VLAN_Staff_ID,$VLAN_ATM_ID,$VLAN_HR_ID,$VLAN_IT_ID")
+
+interface range g1/0/21-22
+ channel-group 1 mode active
+
+interface port-channel 1
+$(TrunkportStanza)
+
+interface g1/0/23
+$(AccessportStanza 105)
+
+interface g1/0/24
+$(AccessportStanza 104)
 EOF
 }
 
@@ -318,7 +341,7 @@ EOF
 }
 
 TrunkportStanza () {
-  vlanIDsAllowed="$1"
+  vlanIDsAllowed="${1:-}"
   if [ ! "$vlanIDsAllowed" = "" ]; then
     cat <<EOF
  switchport trunk allowed vlan $vlanIDsAllowed

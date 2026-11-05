@@ -9,7 +9,7 @@ configure terminal
 interface g1/0/1
 <% AccessportStanza -%>
 
-interface rnage g1/0/2-23
+interface range g1/0/2-23
 <% ShutportStanza -%>
 
 interface g1/0/24

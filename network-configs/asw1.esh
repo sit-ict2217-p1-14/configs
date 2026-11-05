@@ -6,4 +6,22 @@ configure terminal
 <% CommonConfigAll $DeviceName %>
 <% CommonConfigASW_SSW $DeviceName %>
 
+interface range g1/0/1-12
+<% AccessportStanza 10 -%>
+
+interface range g1/0/13-14
+<% AccessportStanza 30 -%>
+
+interface range g1/0/15-17
+<% AccessportStanza 20 -%>
+
+interface range g1/0/18-20
+<% AccessportStanza 40 -%>
+
+interface range g1/0/21-22
+<% ShutportStanza -%>
+
+interface range g1/0/23-24
+<% TrunkportStanza 10,20,30,40 -%>
+
 end

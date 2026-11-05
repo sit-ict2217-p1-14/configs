@@ -206,9 +206,9 @@ ip access-list standard snat-acl
 ip nat inside source list snat-acl pool snat-pool overload
 
 ip route 0.0.0.0 0.0.0.0 $ispDefaultGateway
-ip route 203.149.211.10 255.255.255.255 172.16.1.75
-ip route 203.149.211.11 255.255.255.255 172.16.1.86
-ip route 203.149.211.13 255.255.255.255 172.16.1.58
+ip route $AuthoritativeDNSServer_ISP1_IP_ADDRESS_PUBLIC_FW1 255.255.255.255 $AuthoritativeDNSServer_ISP1_IP_ADDRESS
+ip route $WebServer_ISP1_IP_ADDRESS_PUBLIC_FW1 255.255.255.255 $WebServer_ISP1_IP_ADDRESS
+ip route $Jumphost_ISP1_IP_ADDRESS_PUBLIC_FW1 255.255.255.255 $Jumphost_ISP1_IP_ADDRESS
 EOF
 }
 
@@ -320,7 +320,7 @@ EOF
 
 CommonConfigASW_SSW () {
   deviceName="$1"
-  cat <<'EOF'
+  cat <<EOF
 ! === VLANs ===
 $(Internal_VLANConfig "$deviceName")
 EOF

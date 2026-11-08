@@ -263,6 +263,7 @@ vlanName="\${VLAN_${vlan_internal_template_name}_NAME}"
 vlanSubnetMask="\${VLAN_${vlan_internal_template_name}_SUBNET_MASK}"
 vlanDefaultGateway="\${VLAN_${vlan_internal_template_name}_DEFAULT_GATEWAY}"
 vlanTrunkedBy="\${VLAN_${vlan_internal_template_name}_TRUNKED_BY}}"
+vlanHasDHCPLease="\${VLAN_${vlan_internal_template_name}_DHCP_LEASE}"
 sviIndex="\${${deviceName}_SVI_INDEX}"
 EOF
     )"
@@ -304,6 +305,7 @@ interface vlan $vlanID
   standby version 2
   standby $vlanID ip $vlanDefaultGateway
   standby $vlanID priority 100
+  $([ "$vlanHasDHCPLease" = "0" ] && printf '%s' "ip helper-address $DHCP_IP_ADDRESS")
   no shutdown
 EOF
       )"
@@ -378,7 +380,7 @@ mka policy MKA-POL-DSW
 key chain MK-KC-DSW-PO1 macsec
  key 01
   cryptographic-algorithm aes-256-cmac
-  key-string "$SECRET_MACSEC_MKA_KC_DSW_PO1_PSK"
+  key-string $SECRET_MACSEC_MKA_KC_DSW_PO1_PSK
 
 
 ! === OSPF ===

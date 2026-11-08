@@ -305,6 +305,7 @@ interface vlan $vlanID
   standby version 2
   standby $vlanID ip $vlanDefaultGateway
   standby $vlanID priority 100
+  standby $vlanID preempt
   $([ "$vlanHasDHCPLease" = "0" ] && printf '%s' "ip helper-address $DHCP_IP_ADDRESS")
   no shutdown
 EOF

@@ -4,6 +4,21 @@ configure terminal
 <% DeviceName=CSW1 %>
 <%+ ./partials/common.esh.part %>
 <% CommonConfigAll $DeviceName %>
+
+interface vlan <%= $VLAN_Core_Sync_ID %>
+ ip address <%= "$VLAN_Core_Sync_FIRST_HOST $VLAN_Core_Sync_SUBNET_MASK" %>
+ no shutdown
+
+interface vlan <%= $VLAN_DSW1_FW1_ID %>
+ ip address <%= "$VLAN_DSW1_FW1_FIRST_HOST $VLAN_DSW1_FW1_SUBNET_MASK" %>
+ no shutdown
+
+interface vlan <%= $VLAN_DSW1_FW2_ID %>
+ ip address <%= "$VLAN_DSW1_FW2_DEFAULT_GATEWAY $VLAN_DSW1_FW2_SUBNET_MASK" %>
+ no shutdown
+
+ip route <%= "$VLAN_IntSvc_SUBNET_ADDRESS $VLAN_IntSvc_SUBNET_MASK $VLAN_DSW1_FW1_FIRST_HOST" %>
+
 <% CommonConfigDSW $DeviceName %>
 
 end

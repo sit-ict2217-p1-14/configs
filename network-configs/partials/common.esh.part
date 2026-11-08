@@ -4,7 +4,13 @@ Internal_CommonConfigAll_CISCO_IOS () {
   cat <<EOF
 hostname $networkDeviceName
 
+line console 0
+ length 0
+
+
+
 ! === Remote Management ===
+
 ip domain name $DOMAIN_SUFFIX_NET_MGMT
 ip name-server $CachingDNSServer_IP_ADDRESS
 
@@ -16,11 +22,26 @@ vrf definition $OOB_VRF_NAME
 exit
 
 interface $oobInterface
+!  vrf command below is ignored if \$oobInterface is not "g0/0" (i.e.
+!  its an OOB management switch). This is expected as OOB switches do
+!  not need a separate VRF (cause why separate OOB from... OOB?).
  vrf forwarding $OOB_VRF_NAME
  ip address $oobIPAddress $VLAN_OOB_SUBNET_MASK
  no shutdown
 exit
 
+
+
+! === Logging ===
+
+ntp server vrf $OOB_VRF_NAME $R1_OOB_IP_ADDRESS
+archive
+ log config
+  logging enable
+  notify syslog contenttype plaintext
+ logging trap warnings
+ logging source-interface $oobInterface vrf $OOB_VRF_NAME
+ logging host $SIEM_OOB_IP_ADDRESS vrf $OOB_VRF_NAME transport udp port 9003
 
 
 ! === AAA ===
@@ -35,6 +56,18 @@ line vty 0 $vtyMax
  exec-timeout 20 0
  login authentication default
 exit
+
+radius server RADVM
+ address ipv4 $AAA_IP_ADDRESS
+ key $SECRET_RADIUS
+
+aaa group server radius RADGRP
+ server name RADVM
+ ip radius source-interface $oobInterface
+
+aaa authentication dot1x default group RADGRP
+aaa authorization network default group RADGRP
+aaa accounting dot1x default start-stop group RADGRP
 
 tacacs server TACVM
  address ipv4 $AAA_IP_ADDRESS
@@ -54,8 +87,6 @@ aaa accounting commands 15 default stop-only group TACGRP
 aaa authorization exec default group TACGRP local
 aaa authorization commands 15 default group TACGRP local
 aaa authorization console
-
-
 EOF
 }
 
@@ -286,29 +317,87 @@ EOF
 
 CommonConfigDSW () {
   deviceName="$1"
+  deviceNameToVLANName="$(printf '%s' "$deviceName" | sed -E 's/CSW/DSW/')"
+  deviceIndex="$(printf '%s' "$deviceName" | sed -E 's/CSW//')"
+  eval "$(cat <<EOF
+ospfFW1Interface=\$VLAN_${deviceNameToVLANName}_FW1_ID
+ospfFW2Interface=\$VLAN_${deviceNameToVLANName}_FW2_ID
+
+vlanDswxFw1ID=\$VLAN_${deviceNameToVLANName}_FW1_ID
+vlanDswxFw1FirstHost=\$VLAN_${deviceNameToVLANName}_FW1_FIRST_HOST
+vlanDswxFw1SubnetMask=\$VLAN_${deviceNameToVLANName}_FW1_SUBNET_MASK
+
+
+vlanDswxFw2ID=\$VLAN_${deviceNameToVLANName}_FW2_ID
+vlanDswxFw2DefaultGateway=\$VLAN_${deviceNameToVLANName}_FW2_DEFAULT_GATEWAY
+vlanDswxFw2FirstHost=\$VLAN_${deviceNameToVLANName}_FW2_FIRST_HOST
+vlanDswxFw2SubnetMask=\$VLAN_${deviceNameToVLANName}_FW2_SUBNET_MASK
+EOF
+  )"
+
+  if [ "$deviceIndex" -eq 1 ]; then
+    vlanCoreSyncIPAddress="$VLAN_Core_Sync_FIRST_HOST"
+  else
+    vlanCoreSyncIPAddress="$VLAN_Core_Sync_SECOND_HOST"
+  fi
 
   cat <<EOF
 ! === Inter-VLAN Routing ===
 ip routing
 
+interface vlan $VLAN_Core_Sync_ID
+ ip address vlanCoreSyncIPAddress_HOST $VLAN_Core_Sync_SUBNET_MASK
+ no shutdown
+
+interface vlan $vlanDswxFw1ID
+ ip address $vlanDswxFw1FirstHost $vlanDswxFw1SubnetMask
+ no shutdown
+
+interface vlan $vlanDswxFw2ID
+ ip address $vlanDswxFw2DefaultGateway $vlanDswxFw2SubnetMask
+ no shutdown
+
+ip route $VLAN_IntSvc_SUBNET_ADDRESS $VLAN_IntSvc_SUBNET_MASK $vlanDswxFw2FirstHost
+
+
 $(Internal_VLANConfig "$deviceName")
+
+
+
+! === MACsec/MKA (DSW) ===
+mka policy MKA-POL-DSW
+ macsec-cipher-suite gcm-aes-xpn-256
+ sak-rekey interval 3600
+ send-secure-announcements
+
+key chain MK-KC-DSW-PO1 macsec
+ key 01
+  cryptographic-algorithm aes-256-cmac
+  key-string "$SECRET_MACSEC_MKA_KC_DSW_PO1_PSK"
+
 
 ! === OSPF ===
 router ospf 1
  router-id $oobIPAddress
  passive-interface default
- no passive-interface g1/0/24
+ no passive-interface vlan $VLAN_Core_Sync_ID
+ no passive-interface vlan $ospfFW1Interface
  network $PRIVATE_NETWORK_SUBNET_ADDRESS $PRIVATE_NETWORK_NETWORK_WILDCARD area 0
- default-information originate
+ ! Required as FW2 does not participate in OSPF,
+ ! and its subnets are static-routed:
+ redistribute static
 
 interface g1/0/1
 $(TrunkportStanza "$VLAN_Staff_ID,$VLAN_ATM_ID,$VLAN_HR_ID,$VLAN_IT_ID")
 
 interface range g1/0/21-22
+ macsec network-link
+ mka policy MKA-POL-DSW
+ mka pre-shared-key key-chain MK-KC-DSW-PO1
  channel-group 1 mode active
 
 interface port-channel 1
-$(TrunkportStanza)
+$(TrunkportStanza "$VLAN_Staff_ID,$VLAN_ATM_ID,$VLAN_HR_ID,$VLAN_IT_ID,$VLAN_Core_Sync_ID,$VLAN_DSW1_FW1_ID,$VLAN_DSW1_FW2_ID")
 
 interface g1/0/23
 $(AccessportStanza 105)

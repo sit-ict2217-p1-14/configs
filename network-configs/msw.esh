@@ -3,13 +3,54 @@ configure terminal
 
 <% DeviceName=MSW %>
 <%+ ./partials/common.esh.part %>
+<% CommonConfigAll $DeviceName %>
 
-hostname <%= $DeviceName %>
+! === EAP-TLS ===
+radius server RADVM
+ address ipv4 10.0.0.3
+ key aFi7AIE%GjmwPDLfKd^6
+ 
+aaa group server radius RADGRP
+ server name RADVM
+ ip radius source-interface Vlan99
+
+
+aaa authentication dot1x default group RADGRP
+aaa authorization network default group RADGRP
+aaa accounting dot1x default start-stop group RADGRP
+
+crypto pki trustpoint SW-ID
+ revocation-check none
+
+; Needed for those that use g0/0 (i.e. non-MSWs) to allow p12 import.
+ip http client source-interface g0/0
+
+crypto pki import SW-ID pkcs12 http://10.0.0.16/cert-bundles/msw.p12 password rzVt6C7EzguZpDbTlKUmzKyFEF4pSGwi
+
+interface GigabitEthernet1/0/7
+ switchport access vlan 99
+ switchport mode access
+ switchport nonegotiate
+ authentication port-control auto
+ authentication periodic
+ dot1x pae authenticator
+end
+
+<%
+MSWAccessportSemisecureStanza () {
+  cat <<EOF
+$(AccessportStanza "$VLAN_OOB_ID")
+EOF
+}
+-%>
+
+! === Interfaces ===
 
 interface range g1/0/1-11
 <% AccessportStanza "$VLAN_OOB_ID" -%>
-  switchport protected
+ switchport protected
 
+! Proxmox vmbr0 (OOB/Jumphost) (excl. IPMI)
 interface g1/0/12
 <% AccessportStanza "$VLAN_OOB_ID" -%>
 

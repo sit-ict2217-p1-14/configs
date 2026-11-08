@@ -6,12 +6,9 @@ configure terminal
 <% CommonConfigAll $DeviceName -%>
 
 interface g1/0/1
-<% AccessportStanza "$VLAN_Jump_ID" -%>
+<% TrunkportStanza "$VLAN_Jump_ID,$VLAN_DMZ_ID" -%>
 
-interface g1/0/2
-<% AccessportStanza "$VLAN_DMZ_ID" -%>
-
-interface range g1/0/3-23
+interface range g1/0/2-24
 <% ShutportStanza -%>
 
 interface g1/0/24

@@ -30,10 +30,9 @@ interface e1/2
 <% ASARouteportStanza 'inside2' 100 "$VLAN_DSW2_FW1_DEFAULT_GATEWAY" "$VLAN_DSW2_FW1_SUBNET_MASK" %>
 
 interface e1/3
-<% ASARouteportStanza 'jump' 100 "$VLAN_Jump_DEFAULT_GATEWAY" "$VLAN_Jump_SUBNET_MASK" %>
-
-interface e1/4
-<% ASARouteportStanza 'dmz' 50 "$VLAN_DMZ_DEFAULT_GATEWAY" "$VLAN_DMZ_SUBNET_MASK" %>
+ switchport
+ switchport mode trunk
+ switchport trunk allowed vlan $VLAN_Jump_ID,$VLAN_DMZ_ID
 
 interface e1/5
  shutdown

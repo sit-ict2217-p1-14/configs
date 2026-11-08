@@ -4,6 +4,9 @@ servers/*
 !*.esh.part
 servers/web-server/config/cert.pem
 servers/web-server/config/key.pem
+pki/*
+!pki/ca
+!pki/*.sh
 
 *~
 .#*

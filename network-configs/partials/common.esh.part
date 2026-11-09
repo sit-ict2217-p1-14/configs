@@ -58,12 +58,17 @@ line vty 0 $vtyMax
 exit
 
 radius server RADVM
- address ipv4 $AAA_IP_ADDRESS
+ address ipv4 $AAA_IP_ADDRESS auth-port 1812 acct-port 1813
  key $SECRET_RADIUS
+ timeout 3
+exit
 
 aaa group server radius RADGRP
  server name RADVM
+ !=== Previously missing VRF config for RADIUS
+ ip vrf forwarding $OOB_VRF_NAME
  ip radius source-interface $oobInterface
+exit
 
 aaa authentication dot1x default group RADGRP
 aaa authorization network default group RADGRP
@@ -426,6 +431,68 @@ EOF
   cat <<EOF
  switchport mode access
  switchport nonegotiate
+EOF
+}
+
+# Global L2 defences + 802.1X for switches with end-user access ports.
+# Usage: EndUserL2SecurityGlobal "<comma-separated end-user VLAN IDs>"
+EndUserL2SecurityGlobal () {
+  vlanIDs="$1"
+  cat <<EOF
+! === End-user L2 security (global) ===
+spanning-tree mode rapid-pvst
+
+ip dhcp snooping vlan $vlanIDs
+no ip dhcp snooping information option
+ip dhcp snooping
+ip arp inspection vlan $vlanIDs
+
+! 802.1X (EAP-TLS) against RADGRP; ports opt in via EndUserPortStanza
+dot1x system-auth-control
+
+errdisable recovery cause bpduguard
+errdisable recovery cause psecure-violation
+errdisable recovery cause dhcp-rate-limit
+errdisable recovery cause arp-inspection
+
+login on-failure log
+login on-success log
+EOF
+}
+
+# Access port for end-user hosts (Staff/ATM/HR/IT): AccessportStanza
+# plus port-security, 802.1X, BPDU guard and DHCP snooping rate limit.
+# The VLAN given here is the fallback; FreeRADIUS assigns the real VLAN
+# per host certificate (Tunnel-Private-Group-Id in the users file).
+# Usage: EndUserPortStanza <vlan-id>
+EndUserPortStanza () {
+  AccessportStanza "${1:-}"
+  cat <<EOF
+ switchport port-security maximum 3
+ switchport port-security violation restrict
+ switchport port-security aging time 5
+ switchport port-security aging type inactivity
+ switchport port-security
+ authentication port-control auto
+ authentication host-mode single-host
+ authentication violation restrict
+ dot1x pae authenticator
+ dot1x timeout tx-period 10
+ ! Against EAP flood attacks: 60 s quiet period after a failed attempt
+ dot1x timeout held-period 60
+ dot1x max-req 2
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ ip dhcp snooping limit rate 15
+EOF
+}
+
+# Uplink towards the distribution switches: trusted for DHCP snooping/DAI.
+# Usage: append after TrunkportStanza on uplink trunks.
+TrustedUplinkStanza () {
+  cat <<EOF
+ ip arp inspection trust
+ ip dhcp snooping trust
 EOF
 }
 

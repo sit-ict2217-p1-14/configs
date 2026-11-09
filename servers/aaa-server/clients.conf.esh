@@ -1,0 +1,32 @@
+# FreeRADIUS RADIUS clients (the switches allowed to send 802.1X requests).
+# Rendered by render.sh, then APPENDED on the AAA VM to /etc/freeradius/3.0/clients.conf
+# (see docs/aaa/VM-commands.txt, FreeRADIUS step 7).
+# Secret must match "radius server RADVM / key" on each switch (SECRET_RADIUS).
+
+client msw {
+  ipaddr = <%= "$MSW_OOB_IP_ADDRESS" %>
+  secret = "<%= "$SECRET_RADIUS" %>"
+  shortname = msw
+  nas_type = cisco
+}
+
+client csw1 {
+  ipaddr = <%= "$CSW1_OOB_IP_ADDRESS" %>
+  secret = "<%= "$SECRET_RADIUS" %>"
+  shortname = csw1
+  nas_type = cisco
+}
+
+client csw2 {
+  ipaddr = <%= "$CSW2_OOB_IP_ADDRESS" %>
+  secret = "<%= "$SECRET_RADIUS" %>"
+  shortname = csw2
+  nas_type = cisco
+}
+
+client asw1 {
+  ipaddr = <%= "$ASW1_OOB_IP_ADDRESS" %>
+  secret = "<%= "$SECRET_RADIUS" %>"
+  shortname = asw1
+  nas_type = cisco
+}

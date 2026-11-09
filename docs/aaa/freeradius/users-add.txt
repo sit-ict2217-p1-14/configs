@@ -1,0 +1,5 @@
+hr-pc01.net.internal.punggolbanksbbl.sitict.net
+	Tunnel-Type = VLAN,
+	Tunnel-Medium-Type = IEEE-802,
+	Tunnel-Private-Group-Id = "30"
+

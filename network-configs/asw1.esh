@@ -5,23 +5,25 @@ configure terminal
 <%+ ./partials/common.esh.part %>
 <% CommonConfigAll $DeviceName %>
 <% CommonConfigASW_SSW $DeviceName %>
+<% EndUserL2SecurityGlobal "$VLAN_Staff_ID,$VLAN_ATM_ID,$VLAN_HR_ID,$VLAN_IT_ID" %>
 
 interface range g1/0/1-12
-<% AccessportStanza 10 -%>
+<% EndUserPortStanza "$VLAN_Staff_ID" -%>
 
 interface range g1/0/13-14
-<% AccessportStanza 30 -%>
+<% EndUserPortStanza "$VLAN_HR_ID" -%>
 
 interface range g1/0/15-17
-<% AccessportStanza 20 -%>
+<% EndUserPortStanza "$VLAN_ATM_ID" -%>
 
 interface range g1/0/18-20
-<% AccessportStanza 40 -%>
+<% EndUserPortStanza "$VLAN_IT_ID" -%>
 
 interface range g1/0/21-22
 <% ShutportStanza -%>
 
 interface range g1/0/23-24
 <% TrunkportStanza 10,20,30,40 -%>
+<% TrustedUplinkStanza -%>
 
 end

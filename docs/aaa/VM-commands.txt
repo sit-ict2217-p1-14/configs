@@ -1,3 +1,7 @@
+# =============
+# TACACS_PLUS-NG
+# =============
+
 # Setup from snapshot
 sudo nano /usr/local/etc/tac_plus-ng.cfg
 sudo /usr/local/sbin/tac_plus-ng -P /usr/local/etc/tac_plus-ng.cfg
@@ -14,3 +18,119 @@ sudo systemctl restart tac_plus-ng
 # Verify accounting
 systemctl status tac_plus-ng
 sudo tail -f /var/log/tac_plus-ng/*.log
+
+# ==========================================================================
+# FreeRADIUS 802.1X (EAP-TLS) for ASW1 end-user ports - from a bare VM
+#   PKI folders on the VM: ~/freeradius-pki/{ca, freeradius, hosts/<host>, <device>}
+#   Needs this repo copied to ~/configs and the PKI_CA_KEY passphrase
+#   Check the clock first: timedatectl -> "Universal time" = real UTC (SGT - 8h)
+# ==========================================================================
+
+# 1. Install (freeradius should already be installed from snapshot)
+sudo apt update
+sudo apt install -y freeradius
+sudo systemctl stop freeradius
+
+# 2. PKI folder, team CA, mkhost.sh, host list
+mkdir -p ~/freeradius-pki/ca ~/freeradius-pki/freeradius
+cp ~/configs/pki/ca/ca.key ~/configs/pki/ca/ca.pem ~/freeradius-pki/ca/
+cp ~/configs/pki/mkhost.sh ~/configs/docs/aaa/freeradius/users-add.txt ~/freeradius-pki/
+cd ~/freeradius-pki
+
+# 3. FreeRADIUS server certificate (signing asks for the PKI_CA_KEY passphrase)
+openssl genrsa -out freeradius/server.key 2048
+openssl req -new -key freeradius/server.key -subj "/CN=radius.internal.punggolbanksbbl.sitict.net" -out freeradius/server.csr
+cat > freeradius/server.ext <<'EOF'
+basicConstraints=CA:FALSE
+keyUsage=digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+subjectAltName=DNS:radius.internal.punggolbanksbbl.sitict.net
+EOF
+openssl x509 -req -in freeradius/server.csr -CA ca/ca.pem -CAkey ca/ca.key -CAcreateserial -days 825 -sha256 -extfile freeradius/server.ext -out freeradius/server.pem
+openssl verify -CAfile ca/ca.pem freeradius/server.pem   # OK
+
+# 4. Install certificates into FreeRADIUS
+sudo install -o freerad -g freerad -m 640 freeradius/server.key freeradius/server.pem ca/ca.pem /etc/freeradius/3.0/certs/
+
+# 5. EAP module: EAP-TLS only, trust only our CA, identity must equal cert CN
+sudo cp -p /etc/freeradius/3.0/mods-available/eap /etc/freeradius/3.0/mods-available/eap.orig
+sudo tee /etc/freeradius/3.0/mods-available/eap > /dev/null <<'EOF'
+eap {
+    default_eap_type = tls
+    timer_expire     = 60
+    max_sessions     = ${max_requests}
+
+    tls-config tls-common {
+        private_key_file = ${certdir}/server.key
+        certificate_file = ${certdir}/server.pem
+        # Trust ONLY our CA (the default, the system bundle, trusts every public CA)
+        ca_file          = ${certdir}/ca.pem
+
+        tls_min_version  = "1.2"
+        tls_max_version  = "1.2"
+        cipher_list      = "HIGH"
+
+        # EAP identity (User-Name) must equal the certificate CN
+        check_cert_cn    = %{User-Name}
+    }
+
+    tls {
+        tls = tls-common
+        # Must be here (in "tls"), not in tls-config, or it is silently ignored
+        virtual_server = check-eap-tls
+    }
+}
+EOF
+
+# 6. Certificate checks: name format + allow-list (must be in the users file)
+sudo tee /etc/freeradius/3.0/sites-available/check-eap-tls > /dev/null <<'EOF'
+server check-eap-tls {
+    authorize {
+        # Only certificates named <name>.net.internal.punggolbanksbbl.sitict.net
+        if (&TLS-Client-Cert-Common-Name !~ /^[a-z0-9-]+\.net\.internal\.punggolbanksbbl\.sitict\.net$/) {
+            reject
+        }
+        # Allow-list: the certificate name must have an entry in the users file
+        files
+        if (noop) {
+            reject
+        }
+        # Required: without it every request is rejected ("No Auth-Type found")
+        update config {
+            &Auth-Type := Accept
+        }
+    }
+}
+EOF
+sudo ln -sf ../sites-available/check-eap-tls /etc/freeradius/3.0/sites-enabled/check-eap-tls
+
+# 7. RADIUS clients (switches): rendered from servers/aaa-server/clients.conf.esh
+#    (RUN ./render.sh before copying the repo to ~/configs)!! IMPORTANT
+sudo cp -p /etc/freeradius/3.0/clients.conf /etc/freeradius/3.0/clients.conf.orig
+cat ~/configs/servers/aaa-server/clients.conf | sudo tee -a /etc/freeradius/3.0/clients.conf > /dev/null
+
+# 8. Host -> VLAN entries (from ~/freeradius-pki/users-add.txt, at the top)
+sudo cp -p /etc/freeradius/3.0/mods-config/files/authorize /etc/freeradius/3.0/mods-config/files/authorize.orig
+sudo sh -c "cat $HOME/freeradius-pki/users-add.txt /etc/freeradius/3.0/mods-config/files/authorize.orig > /etc/freeradius/3.0/mods-config/files/authorize"
+
+# 9. Log Login OK / Login incorrect to /var/log/freeradius/radius.log
+sudo sed -i 's/^\(\s*\)auth = no$/\1auth = yes/' /etc/freeradius/3.0/radiusd.conf
+
+# 10. Check and start
+sudo freeradius -CX | tail -1   # Configuration appears to be OK
+sudo systemctl enable --now freeradius
+
+# Add / remove hosts: docs/aaa/freeradius/mkhost.md ; Windows hosts: docs/aaa/freeradius/windows-8021x-client.md
+
+# FreeRADIUS: apply changes
+sudo freeradius -CX | tail -1
+sudo systemctl restart freeradius
+
+# FreeRADIUS: live debug (Ctrl+C to stop)
+sudo systemctl stop freeradius
+sudo freeradius -X
+sudo systemctl start freeradius
+
+# FreeRADIUS: logs
+sudo tail -f /var/log/freeradius/radius.log            # Login OK / Login incorrect
+sudo ls /var/log/freeradius/radacct/10.0.0.11/         # 802.1X accounting (detail-YYYYMMDD)

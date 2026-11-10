@@ -1,0 +1,14 @@
+<% zone=punggolbanksbbl.sitict.net. -%>
+$TTL 3600
+$ORIGIN <%= $zone %>
+
+@       IN      SOA     ns1.<%= $zone %> admin.<%= $zone %> (
+                        2026110403
+                        3600
+                        600
+                        1209600
+                        3600 )
+        IN      NS      ns1.<%= $zone %>
+        IN      A       <%= $WebServer_ISP1_IP_ADDRESS_PUBLIC_FW1 %>
+ns1     IN      A       <%= $AuthoritativeDNSServer_ISP1_IP_ADDRESS_PUBLIC_FW1 %>
+www     IN      CNAME   <%= $zone %>

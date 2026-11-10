@@ -1,0 +1,35 @@
+group {
+  option domain-name-servers <%= $CachingDNSServer_IP_ADDRESS %>;
+
+  <%
+  vlanInternalTemplateNames="$( \
+    printf '%s' "$VLANS_INTERNAL_TEMPLATE_NAMES" |
+    sed 's/\\n/\n/g')"
+  while IFS= read -r vlan_internal_template_name; do
+    eval "$(cat <<EOF
+      vlanSubnetAddress=\$VLAN_${vlan_internal_template_name}_SUBNET_ADDRESS
+      vlanSubnetMask=\$VLAN_${vlan_internal_template_name}_SUBNET_MASK
+      vlanDefaultGateway=\$VLAN_${vlan_internal_template_name}_DEFAULT_GATEWAY
+      vlanFirstHost=\$VLAN_${vlan_internal_template_name}_FIRST_HOST
+      vlanLastHost=\$VLAN_${vlan_internal_template_name}_LAST_HOST
+      vlanDHCPLease=\$VLAN_${vlan_internal_template_name}_DHCP_LEASE
+EOF
+    )"
+
+  if [ "$vlan_internal_template_name" = "OOB" ]; then
+  %>
+  subnet <%= $vlanSubnetAddress %> netmask <%= $vlanSubnetMask %> {}
+  <%
+  elif [ ! "$vlanDHCPLease" = "" ]; then
+  %>
+  subnet <%= $vlanSubnetAddress %> netmask <%= $vlanSubnetMask %> {
+    option routers <%= $vlanDefaultGateway %>;
+    range <%= $vlanFirstHost %> <%= $vlanLastHost %>;
+  }
+  <%
+  fi
+  done <<EOF
+$vlanInternalTemplateNames
+EOF
+  %>
+}

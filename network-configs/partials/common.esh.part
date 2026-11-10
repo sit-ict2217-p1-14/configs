@@ -296,6 +296,12 @@ vlan $vlanID
 EOF
     )"
 
+    if [ "$sviIndex" = "1" ]; then
+      rootPriority='primary'
+    else
+      rootPriority='secondary'
+    fi
+
     if [ ! "$vlanSVIIPAddress" = "" ]; then
         vlanInterfaces="$vlanInterfaces$(cat <<EOF
 
@@ -308,10 +314,11 @@ interface vlan $vlanID
   standby $vlanID preempt
   $([ "$vlanHasDHCPLease" = "0" ] && printf '%s' "ip helper-address $DHCP_IP_ADDRESS")
   no shutdown
+
+spanning-tree vlan $vlanID root $rootPriority
 EOF
       )"
     fi
-
   done <<EOF
 $vlanInternalTemplateNames
 EOF
@@ -395,8 +402,22 @@ router ospf 1
  ! and its subnets are static-routed:
  redistribute static
 
+
+
+! === ACL ===
+time-range TransactionsTimeRange
+ periodic weekdays 08:00 to 17:00
+
+ip access-list extended IntSvcOut
+ permit tcp $Transactions_IP_ADDRESS $VLAN_IntSvc_NETWORK_WILDCARD any eq ftp time-range TransactionsTimeRange
+ deny ip any any log
+
+
+
+! === Interfaces ===
 interface g1/0/1
 $(TrunkportStanza "$VLAN_Staff_ID,$VLAN_ATM_ID,$VLAN_HR_ID,$VLAN_IT_ID")
+ spanning-tree rootguard
 
 interface range g1/0/21-22
  macsec network-link
@@ -409,9 +430,12 @@ $(TrunkportStanza "$VLAN_Staff_ID,$VLAN_ATM_ID,$VLAN_HR_ID,$VLAN_IT_ID,$VLAN_Cor
 
 interface g1/0/23
 $(AccessportStanza 105)
+ spanning-tree rootguard
+ ip access-group IntSvcOut out
 
 interface g1/0/24
 $(AccessportStanza 104)
+ spanning-tree rootguard
 EOF
 }
 

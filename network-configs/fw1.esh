@@ -71,9 +71,13 @@ object network DMZ-DNS
 object network JUMP-JUMPHOST
  host <%= $Jumphost_ISP1_IP_ADDRESS %>
 
+object-group service WEB-PORTS tcp
+ port-object eq www
+ port-object eq https
+
 access-group OUTSIDE-IN in interface outside
-access-list OUTSIDE-IN extended permit tcp any object DMZ-WEB eq www
-access-list OUTSIDE-IN extended permit tcp any object DMZ-WEB eq https
+
+access-list OUTSIDE_IN extended permit tcp any object DMZ-WEB object-group WEB-PORTS
 access-list OUTSIDE-IN extended permit icmp any object DMZ-WEB
 
 access-list OUTSIDE-IN extended permit tcp any object DMZ-DNS eq domain
@@ -81,5 +85,37 @@ access-list OUTSIDE-IN extended permit icmp any object DMZ-DNS
 
 access-list OUTSIDE-IN extended permit tcp any object JUMP-JUMPHOST eq ssh
 access-list OUTSIDE-IN extended permit icmp any object JUMP-JUMPHOST
+
+
+
+! === DMZ Protection ===
+
+access-list WEB_ACL extended permit tcp any object DMZ-WEB object-group WEB-PORTS
+access-list DNS_ACL extended permit udp any object DMZ-WEB eq domain
+access-list DNS_ACL extended permit tcp any object DMZ-DNS eq domain
+
+class-map WEB_CM
+ match access-list WEB_ACL
+class-map DNS_CM
+ match access-list DNS_ACL
+
+policy-map type inspect dns DNS_PMAP
+ parameters
+  message-length maximum 4096
+  dns-guard
+  protocol-enforcement
+  id-randomization
+
+policy-map OUTSIDE_POLICY
+ class WEB_CM
+  set connection conn-max 20000 embryonic-conn-max 5000 per-client-max 200 per-client-embryonic-max 50
+  set connection timeout embryonic 0:00:20
+ class DNS_CM
+  set connection conn-max 50000 per-client-max 500
+  police input 200000000
+  inspect dns DNS_PMAP
+
+service-policy OUTSIDE_POLICY interface outside
+
 
 end

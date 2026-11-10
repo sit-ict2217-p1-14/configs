@@ -452,17 +452,15 @@ time-range TransactionsTimeRange
 
 ip access-list extended IntSvcIn
 ! Transactions
-!  Permit all other internal traffic from all user VLANs.
+!  Permit all other internal traffic
  permit ip host $Transactions_IP_ADDRESS $PRIVATE_NETWORK_SUBNET_ADDRESS $PRIVATE_NETWORK_NETWORK_WILDCARD
 !  Restrict internet connectivity, time-bound.
- permit ip host $Transactions_IP_ADDRESS any 0.0.0.0 time-range TransactionssTimeRange
+ permit ip host $Transactions_IP_ADDRESS any time-range TransactionsTimeRange
 !  Default deny
- deny ip host $Transactions_IP_ADDRESS any any
-! Other IntSvc
+ deny ip host $Transactions_IP_ADDRESS any log
+! All other IntSvc hosts
 !  Don't restrict outbound
  permit ip any any
- 
-
  deny ip any any log
 
 ip access-list extended IntSvcOut
